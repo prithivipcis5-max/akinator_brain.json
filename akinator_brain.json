@@ -1,0 +1,109 @@
+import json
+import os
+
+class AkinatorNode:
+    def __init__(self, data, is_question=True, yes_branch=None, no_branch=None):
+        self.data = data  # Stores either a question string or a character name string
+        self.is_question = is_question
+        self.yes_branch = yes_branch
+        self.no_branch = no_branch
+
+    def to_dict(self):
+        """Converts the tree to a dictionary format so it can be saved."""
+        if not self.is_question:
+            return {"data": self.data, "is_question": False}
+        return {
+            "data": self.data,
+            "is_question": True,
+            "yes": self.yes_branch.to_dict() if self.yes_branch else None,
+            "no": self.no_branch.to_dict() if self.no_branch else None
+        }
+
+    @staticmethod
+    def from_dict(d):
+        """Reconstructs the tree from a saved dictionary format."""
+        if not d:
+            return None
+        node = AkinatorNode(d["data"], d["is_question"])
+        if d["is_question"]:
+            node.yes_branch = AkinatorNode.from_dict(d.get("yes"))
+            node.no_branch = AkinatorNode.from_dict(d.get("no"))
+        return node
+
+
+def load_game(filename="akinator_brain.json"):
+    """Loads the database or creates a basic starter tree if none exists."""
+    if os.path.exists(filename):
+        with open(filename, "r") as f:
+            return AkinatorNode.from_dict(json.load(f))
+    
+    # Starter database: Asks if it's a real person. Guesses Lionel Messi or Harry Potter.
+    root = AkinatorNode("Is your character a real person?", is_question=True)
+    root.yes_branch = AkinatorNode("Lionel Messi", is_question=False)
+    root.no_branch = AkinatorNode("Harry Potter", is_question=False)
+    return root
+
+
+def save_game(root, filename="akinator_brain.json"):
+    """Saves the current state of the database to a file."""
+    with open(filename, "w") as f:
+        json.dump(root.to_dict(), f, indent=4)
+
+
+def play_game(node):
+    """The main gameplay loop navigating through the decision tree."""
+    # CASE 1: Akinator is asking a clarifying question
+    if node.is_question:
+        ans = input(f"{node.data} (yes/no): ").strip().lower()
+        if ans == "yes":
+            node.yes_branch = play_game(node.yes_branch)
+        else:
+            node.no_branch = play_game(node.no_branch)
+        return node
+
+    # CASE 2: Akinator reaches a leaf node and makes its final guess
+    else:
+        ans = input(f"Is your character {node.data}? (yes/no): ").strip().lower()
+        if ans == "yes":
+            print("✨ I win! The genie strikes again! ✨")
+            return node
+        else:
+            print("❌ You beat me!")
+            new_char = input("Who was your character? ").strip()
+            new_question = input(f"Give me a yes/no question to tell the difference between {new_char} and {node.data}: \n> ").strip()
+            char_ans = input(f"What is the answer to that question for {new_char}? (yes/no): ").strip().lower()
+
+            # Create the two new guess options
+            new_char_node = AkinatorNode(new_char, is_question=False)
+            old_char_node = AkinatorNode(node.data, is_question=False)
+
+            # Turn the current node into a question node instead of a guess node
+            node.data = new_question
+            node.is_question = True
+
+            # Assign branches based on the user's input
+            if char_ans == "yes":
+                node.yes_branch = new_char_node
+                node.no_branch = old_char_node
+            else:
+                node.yes_branch = old_char_node
+                node.no_branch = new_char_node
+            
+            print(f"Thank you! I have learned about {new_char}.")
+            return node
+
+
+# --- Program Starts Executing Here ---
+if __name__ == "__main__":
+    print("🧠 Welcome to DIY Akinator! Think of a character... 🧠")
+    brain = load_game()
+    
+    while True:
+        brain = play_game(brain)
+        save_game(brain)
+        
+        again = input("\nDo you want to play again? (yes/no): ").strip().lower()
+        if again != "yes":
+            print("Goodbye!")
+            break
+
